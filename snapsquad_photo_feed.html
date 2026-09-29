@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SnapSquad // Shared Friend Photo Feed</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#080812',
+                        cardBg: 'rgba(18, 18, 36, 0.75)',
+                        neonPurple: '#a855f7',
+                        neonCyan: '#06b6d4',
+                        neonPink: '#ec4899',
+                        neonAmber: '#f59e0b',
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    animation: {
+                        'heart-bounce': 'heartBounce 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+                        'glow-pulse': 'glowPulse 3s infinite ease-in-out',
+                        'float': 'float 4s infinite ease-in-out',
+                    },
+                    keyframes: {
+                        heartBounce: {
+                            '0%': { transform: 'scale(0) rotate(-15deg)', opacity: '0' },
+                            '50%': { transform: 'scale(1.3) rotate(0deg)', opacity: '1' },
+                            '100%': { transform: 'scale(1) rotate(0deg)', opacity: '1' }
+                        },
+                        glowPulse: {
+                            '0%, 100%': { filter: 'drop-shadow(0 0 15px rgba(168, 85, 247, 0.4))' },
+                            '50%': { filter: 'drop-shadow(0 0 25px rgba(236, 72, 153, 0.6))' }
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-6px)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts & FontAwesome Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #080812;
+            color: #f3f4f6;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Glassmorphic card design tokens */
+        .glass-panel {
+            background: rgba(18, 18, 36, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+        }
+
+        .glass-nav {
+            background: rgba(10, 10, 22, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Ambient background canvas overlay */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Custom scrollbar hiding for clean pill filters */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Double tap heart animation container */
+        .heart-overlay {
+            pointer-events: none;
+        }
+
+        /* Drawer transition classes */
+        .drawer-slide {
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-24 text-slate-100 flex flex-col items-center justify-start">
+
+    <!-- Canvas Background for animated neon ambient particles -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- Main Container (Mobile focused layout max-width 28rem / 448px) -->
+    <div id="app-wrapper" class="w-full max-w-md min-h-screen px-3 pt-3 flex flex-col relative">
+
+        <!-- Top Header Navigation -->
+        <header class="w-full glass-panel rounded-2xl px-4 py-3 mb-3 flex items-center justify-between sticky top-3 z-30 border border-white/10 shadow-lg">
+            <div class="flex items-center gap-2.5 cursor-pointer" onclick="resetFilters()">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 via-pink-500 to-cyan-400 p-0.5 shadow-[0_0_15px_rgba(236,72,153,0.5)]">
+                    <div class="w-full h-full bg-[#080812] rounded-[10px] flex items-center justify-center">
+                        <i class="fa-solid fa-camera-retro text-transparent bg-clip-text bg-gradient-to-tr from-pink-400 to-purple-400 text-lg"></i>
+                    </div>
+                </div>
+                <div>
+                    <h1 class="text-base font-extrabold tracking-tight text-white flex items-center gap-1">
+                        SnapSquad <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-pink-500/20 text-pink-400 border border-pink-500/30">LIVE</span>
+                    </h1>
+                    <p id="squad-online-text" class="text-[10px] text-slate-400 font-medium">Synced with Squad</p>
+                </div>
+            </div>
+
+            <!-- Header Actions -->
+            <div class="flex items-center gap-2">
+                <button onclick="toggleSearchBar()" class="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-300 hover:text-white active:scale-90 transition-all">
+                    <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                </button>
+                <button onclick="openProfileDrawer()" class="relative group">
+                    <div class="w-9 h-9 rounded-xl p-0.5 bg-gradient-to-r from-purple-500 to-cyan-400 shadow-md">
+                        <div id="header-avatar-preview" class="w-full h-full rounded-[9px] bg-slate-900 flex items-center justify-center text-sm font-bold text-cyan-300 overflow-hidden">
+                            <!-- Injected avatar or emoji -->
+                            😎
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </header>
+
+        <!-- Search Input Bar (Collapsible) -->
+        <div id="search-bar-wrapper" class="hidden mb-3 transition-all duration-300">
+            <div class="relative w-full">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" id="search-input" oninput="handleSearch(this.value)" placeholder="Search photos, captions, or friends..." class="w-full pl-9 pr-9 py-2.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-purple-500 transition-colors">
+                <button onclick="clearSearch()" id="clear-search-btn" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Category Tag Pills Scrolling Bar -->
+        <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 mb-3">
+            <button onclick="filterByCategory('All')" class="category-pill active shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md border border-purple-400/30 transition-all">
+                ✨ All
+            </button>
+            <button onclick="filterByCategory('Hangouts')" class="category-pill shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition-all">
+                🔥 Hangouts
+            </button>
+            <button onclick="filterByCategory('Memes')" class="category-pill shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition-all">
+                😂 Memes
+            </button>
+            <button onclick="filterByCategory('Trips')" class="category-pill shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition-all">
+                ✈️ Trips
+            </button>
+            <button onclick="filterByCategory('Night Out')" class="category-pill shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition-all">
+                🌙 Night Out
+            </button>
+            <button onclick="filterByCategory('Food')" class="category-pill shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition-all">
+                🍕 Food
+            </button>
+        </div>
+
+        <!-- Layout Mode Switcher (Feed vs Grid View) -->
+        <div class="flex items-center justify-between mb-3 px-1">
+            <span id="feed-count-text" class="text-xs font-semibold text-slate-400">Showing recent photos</span>
+            <div class="flex items-center bg-white/5 p-1 rounded-xl border border-white/10">
+                <button onclick="setFeedViewMode('card')" id="view-mode-card" class="p-1.5 px-2.5 rounded-lg text-xs font-semibold bg-purple-600 text-white shadow-sm transition-all">
+                    <i class="fa-solid fa-border-all"></i>
+                </button>
+                <button onclick="setFeedViewMode('grid')" id="view-mode-grid" class="p-1.5 px-2.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
+                    <i class="fa-solid fa-grid-2"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Dynamic Photo Feed Section -->
+        <main id="photos-feed-container" class="space-y-4 mb-6">
+            <!-- Dynamic cards or grid thumbnails render here -->
+        </main>
+
+    </div>
+
+    <!-- Floating Action Button (FAB) for Upload -->
+    <div class="fixed bottom-20 right-5 z-40">
+        <button onclick="openUploadDrawer()" class="w-14 h-14 rounded-full bg-gradient-to-tr from-purple-600 via-pink-600 to-cyan-400 text-white shadow-[0_0_25px_rgba(236,72,153,0.6)] flex items-center justify-center active:scale-90 hover:scale-105 transition-all animate-float border-2 border-white/20">
+            <i class="fa-solid fa-plus text-2xl"></i>
+        </button>
+    </div>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="fixed bottom-3 left-1/2 -translate-x-1/2 w-[92%] max-w-md glass-nav rounded-2xl p-2 z-40 flex items-center justify-around shadow-2xl border border-white/10">
+        <button onclick="resetFilters(); scrollToTop();" class="flex flex-col items-center gap-0.5 p-2 text-pink-400 hover:text-pink-300 transition-colors">
+            <i class="fa-solid fa-house text-base"></i>
+            <span class="text-[10px] font-medium">Feed</span>
+        </button>
+        <button onclick="setFeedViewMode('grid')" class="flex flex-col items-center gap-0.5 p-2 text-slate-400 hover:text-purple-400 transition-colors">
+            <i class="fa-solid fa-grip text-base"></i>
+            <span class="text-[10px] font-medium">Grid</span>
+        </button>
+        <button onclick="openUploadDrawer()" class="flex flex-col items-center gap-0.5 p-2 text-slate-400 hover:text-cyan-400 transition-colors">
+            <i class="fa-solid fa-cloud-arrow-up text-base"></i>
+            <span class="text-[10px] font-medium">Upload</span>
+        </button>
+        <button onclick="openProfileDrawer()" class="flex flex-col items-center gap-0.5 p-2 text-slate-400 hover:text-amber-400 transition-colors">
+            <i class="fa-solid fa-user-gear text-base"></i>
+            <span class="text-[10px] font-medium">Profile</span>
+        </button>
+    </nav>
+
+    <!-- UPLOAD DRAWER / MODAL -->
+    <div id="upload-drawer" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 opacity-0 pointer-events-none transition-opacity duration-300 flex items-end justify-center">
+        <div id="upload-panel" class="w-full max-w-md bg-[#0d0d1e] border-t border-pink-500/30 rounded-t-3xl p-5 max-h-[90vh] overflow-y-auto drawer-slide transform translate-y-full flex flex-col shadow-2xl">
+            
+            <div class="w-12 h-1.5 bg-slate-700 rounded-full mx-auto mb-4 cursor-pointer" onclick="closeUploadDrawer()"></div>
+
+            <div class="flex items-center justify-between mb-4 pb-2 border-b border-white/10">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-sparkles text-pink-400 text-lg"></i>
+                    <h3 class="text-lg font-bold text-white">Share Photo to Squad</h3>
+                </div>
+                <button onclick="closeUploadDrawer()" class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Upload Type Toggle Tabs -->
+            <div class="flex bg-white/5 p-1 rounded-xl mb-4 text-xs font-semibold">
+                <button id="tab-btn-file" onclick="switchUploadTab('file')" class="flex-1 py-2 rounded-lg bg-pink-600 text-white transition-all">📁 Device File</button>
+                <button id="tab-btn-url" onclick="switchUploadTab('url')" class="flex-1 py-2 rounded-lg text-slate-400 hover:text-white transition-all">🔗 Image URL</button>
+            </div>
+
+            <!-- TAB 1: FILE SELECTOR -->
+            <div id="tab-content-file" class="space-y-3">
+                <div onclick="document.getElementById('file-input-field').click()" class="border-2 border-dashed border-purple-500/40 hover:border-pink-500/80 rounded-2xl p-5 text-center cursor-pointer bg-white/5 transition-all group">
+                    <i class="fa-solid fa-cloud-arrow-up text-3xl text-pink-400 group-hover:scale-110 transition-transform mb-2"></i>
+                    <p class="text-xs font-bold text-slate-200">Tap to select photo from phone</p>
+                    <p class="text-[10px] text-slate-400 mt-1">Supports JPG, PNG, WEBP (auto-compressed)</p>
+                    <input type="file" id="file-input-field" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
+                </div>
+            </div>
+
+            <!-- TAB 2: IMAGE URL -->
+            <div id="tab-content-url" class="space-y-3 hidden">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Direct Image URL</label>
+                    <input type="url" id="upload-url-input" onchange="previewUrlImage(this.value)" placeholder="https://images.unsplash.com/photo..." class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-pink-500">
+                </div>
+            </div>
+
+            <!-- Image Live Preview Box -->
+            <div id="preview-container" class="hidden mt-3 relative rounded-2xl overflow-hidden border border-white/15 max-h-48 bg-black/50">
+                <img id="upload-preview-img" src="" alt="Preview" class="w-full h-48 object-cover">
+                <button onclick="clearUploadPreview()" class="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/70 text-white flex items-center justify-center text-xs">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Additional Details Inputs -->
+            <div class="space-y-3 mt-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Your Name / Alias</label>
+                    <input type="text" id="upload-author-input" placeholder="e.g. Alex, Sam, Jordan" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Caption</label>
+                    <textarea id="upload-caption-input" rows="2" placeholder="Write a hilarious caption..." class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1.5">Category Tag</label>
+                    <div class="flex flex-wrap gap-1.5">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="tag-radio" value="Hangouts" checked class="peer hidden">
+                            <span class="inline-block px-3 py-1 rounded-xl text-xs font-semibold bg-white/5 border border-white/10 peer-checked:bg-purple-600 peer-checked:text-white transition-all">🔥 Hangouts</span>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="tag-radio" value="Memes" class="peer hidden">
+                            <span class="inline-block px-3 py-1 rounded-xl text-xs font-semibold bg-white/5 border border-white/10 peer-checked:bg-purple-600 peer-checked:text-white transition-all">😂 Memes</span>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="tag-radio" value="Trips" class="peer hidden">
+                            <span class="inline-block px-3 py-1 rounded-xl text-xs font-semibold bg-white/5 border border-white/10 peer-checked:bg-purple-600 peer-checked:text-white transition-all">✈️ Trips</span>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="tag-radio" value="Night Out" class="peer hidden">
+                            <span class="inline-block px-3 py-1 rounded-xl text-xs font-semibold bg-white/5 border border-white/10 peer-checked:bg-purple-600 peer-checked:text-white transition-all">🌙 Night Out</span>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="tag-radio" value="Food" class="peer hidden">
+                            <span class="inline-block px-3 py-1 rounded-xl text-xs font-semibold bg-white/5 border border-white/10 peer-checked:bg-purple-600 peer-checked:text-white transition-all">🍕 Food</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button id="post-photo-btn" onclick="submitPhoto()" class="w-full mt-2 py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 font-bold text-xs uppercase tracking-wider text-white shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>Post to SnapSquad</span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- LIGHTBOX / FULLSCREEN DETAIL MODAL -->
+    <div id="lightbox-modal" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 opacity-0 pointer-events-none transition-opacity duration-300 flex flex-col">
+        <!-- Lightbox Top Bar -->
+        <div class="p-4 flex items-center justify-between border-b border-white/10">
+            <div class="flex items-center gap-2">
+                <span id="lb-avatar" class="text-xl">😎</span>
+                <div>
+                    <h4 id="lb-author" class="text-xs font-bold text-white">Author Name</h4>
+                    <p id="lb-time" class="text-[10px] text-slate-400">Timestamp</p>
+                </div>
+            </div>
+            <button onclick="closeLightbox()" class="w-9 h-9 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Lightbox Main Content Scrollable -->
+        <div class="flex-1 overflow-y-auto p-4 flex flex-col items-center">
+            <!-- Large Image Preview -->
+            <div class="relative w-full max-w-sm rounded-2xl overflow-hidden border border-white/10 bg-black/60 shadow-2xl mb-4 group">
+                <img id="lb-image" src="" alt="Full view" class="w-full max-h-[50vh] object-contain mx-auto">
+            </div>
+
+            <div class="w-full max-w-sm space-y-3">
+                <div class="flex items-center justify-between">
+                    <span id="lb-tag" class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">Tag</span>
+                    <button id="lb-like-btn" onclick="toggleLikeFromLightbox()" class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-white/10 text-pink-400 border border-pink-500/30">
+                        <i id="lb-heart-icon" class="fa-solid fa-heart"></i>
+                        <span id="lb-likes-count">0</span>
+                    </button>
+                </div>
+
+                <p id="lb-caption" class="text-xs text-slate-200 leading-relaxed font-normal">Caption goes here...</p>
+
+                <div class="pt-2 border-t border-white/10">
+                    <h5 class="text-xs font-bold text-slate-300 mb-2 flex items-center gap-1.5">
+                        <i class="fa-solid fa-comments text-cyan-400"></i>
+                        <span>Comments (<span id="lb-comments-count">0</span>)</span>
+                    </h5>
+
+                    <!-- Comments List -->
+                    <div id="lb-comments-list" class="space-y-2 max-h-40 overflow-y-auto pr-1">
+                        <!-- Dynamic comments render here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lightbox Comment Input Bar -->
+        <div class="p-3 border-t border-white/10 bg-[#080812] flex items-center gap-2 max-w-md w-full mx-auto">
+            <input type="text" id="lb-comment-input" placeholder="Add a comment..." class="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500">
+            <button onclick="submitLightboxComment()" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl text-xs font-bold text-white active:scale-95 transition-all">
+                Post
+            </button>
+        </div>
+    </div>
+
+    <!-- USER PROFILE IDENTITY DRAWER -->
+    <div id="profile-drawer" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 opacity-0 pointer-events-none transition-opacity duration-300 flex items-center justify-center p-4">
+        <div class="w-full max-w-sm bg-[#0e0e22] border border-white/10 rounded-3xl p-5 flex flex-col shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-user-astronaut text-purple-400"></i>
+                    <span>Your Squad Identity</span>
+                </h3>
+                <button onclick="closeProfileDrawer()" class="w-8 h-8 rounded-full bg-white/5 text-slate-400 hover:text-white flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-slate-300 mb-4">Set your nickname and avatar emoji so friends know who is sharing and commenting!</p>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Your Alias</label>
+                    <input type="text" id="identity-name-input" placeholder="e.g. Alex Vance" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1.5">Choose Avatar Emoji</label>
+                    <div id="emoji-picker-grid" class="grid grid-cols-6 gap-2 text-center text-xl">
+                        <button onclick="selectIdentityEmoji('😎')" class="p-2 rounded-xl bg-white/5 hover:bg-purple-600/40 border border-white/10">😎</button>
+                        <button onclick="selectIdentityEmoji('🔥')" class="p-2 rounded-xl bg-white/5 hover:bg-purple-600/40 border border-white/10">🔥</button>
+                        <button onclick="selectIdentityEmoji('🚀')" class="p-2 rounded-xl bg-white/5 hover:bg-purple-600/40 border border-white/10">🚀</button>
+                        <button onclick="selectIdentityEmoji('👾')" class="p-2 rounded-xl bg-white/5 hover:bg-purple-600/40 border border-white/10">👾</button>
+                        <button onclick="selectIdentityEmoji('🍕')" class="p-2 rounded-xl bg-white/5 hover:bg-purple-600/40 border border-white/10">🍕</button>
+                        <button onclick="selectIdentityEmoji('⚡')" class="p-2 rounded-xl bg-white/5 hover:bg-purple-600/40 border border-white/10">⚡</button>
+                    </div>
+                </div>
+
+                <button onclick="saveIdentity()" class="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl font-bold text-xs uppercase tracking-wider text-white shadow-lg active:scale-95 transition-all mt-2">
+                    Save Squad Identity
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toast-message" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 border border-pink-500/50 text-white px-4 py-2.5 rounded-full text-xs font-semibold shadow-2xl flex items-center gap-2 opacity-0 pointer-events-none transition-all duration-300 transform -translate-y-4">
+        <i class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>
+        <span id="toast-text">Photo uploaded to SnapSquad!</span>
+    </div>
+
+    <!-- Firebase Imports and Main Application Script -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // APP STATE MANAGEMENT
+        window.appState = {
+            viewMode: 'card', // 'card' or 'grid'
+            selectedCategory: 'All',
+            searchQuery: '',
+            currentUser: {
+                name: "Alex",
+                avatar: "😎"
+            },
+            photos: [],
+            activeLightboxId: null,
+            currentUploadImageData: null,
+            db: null,
+            auth: null,
+            user: null,
+            appId: typeof __app_id !== 'undefined' ? __app_id : 'snapsquad-app-default'
+        };
+
+        // DEFAULT SAMPLE PHOTOS (Fallback & Initial Seed Data)
+        const samplePhotos = [
+            {
+                id: "sample-1",
+                author: "Jordan",
+                avatar: "🔥",
+                imageUrl: "https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=800&q=80",
+                caption: "Late night bonfires & endless conversations with the best crew! 🌌🔥",
+                tag: "Night Out",
+                likes: 12,
+                likedBy: [],
+                timestamp: Date.now() - 3600000,
+                comments: [
+                    { author: "Sam", avatar: "🚀", text: "Such a vibe! Let's do this again Friday." },
+                    { author: "Alex", avatar: "😎", text: "Best night of the summer fr!" }
+                ]
+            },
+            {
+                id: "sample-2",
+                author: "Maya",
+                avatar: "🍕",
+                imageUrl: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80",
+                caption: "Pizza night madness! Who ate the last pepperoni slice? 🍕👀",
+                tag: "Food",
+                likes: 8,
+                likedBy: [],
+                timestamp: Date.now() - 7200000,
+                comments: [
+                    { author: "Jordan", avatar: "🔥", text: "It was definitely Sam haha" }
+                ]
+            },
+            {
+                id: "sample-3",
+                author: "Chris",
+                avatar: "✈️",
+                imageUrl: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
+                caption: "Coastal drive sunrise! The squad took over the beach 🏖️☀️",
+                tag: "Trips",
+                likes: 19,
+                likedBy: [],
+                timestamp: Date.now() - 18000000,
+                comments: [
+                    { author: "Maya", avatar: "🍕", text: "Take me back right now!" }
+                ]
+            }
+        ];
+
+        // INITIALIZE FIREBASE WITH AUTH AND FALLBACK GUARD
+        async function initFirebase() {
+            try {
+                if (typeof __firebase_config !== 'undefined') {
+                    const firebaseConfig = JSON.parse(__firebase_config);
+                    const app = initializeApp(firebaseConfig);
+                    window.appState.auth = getAuth(app);
+                    window.appState.db = getFirestore(app);
+
+                    // RULE 3: Auth BEFORE Queries
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        const cred = await signInWithCustomToken(window.appState.auth, __initial_auth_token);
+                        window.appState.user = cred.user;
+                    } else {
+                        const cred = await signInAnonymously(window.appState.auth);
+                        window.appState.user = cred.user;
+                    }
+
+                    setupRealtimeListener();
+                } else {
+                    console.log("Using local mock memory state (No Firebase config injected).");
+                    window.appState.photos = samplePhotos;
+                    renderFeed();
+                }
+            } catch (err) {
+                console.warn("Firebase Auth/Firestore error, falling back to local memory:", err);
+                window.appState.photos = samplePhotos;
+                renderFeed();
+            }
+        }
+
+        // SETUP REALTIME FIRESTORE LISTENER (RULE 1 & RULE 2 compliant)
+        function setupRealtimeListener() {
+            if (!window.appState.db || !window.appState.user) return;
+
+            // RULE 1: Public path `/artifacts/{appId}/public/data/photos`
+            const photosCol = collection(
+                window.appState.db, 
+                'artifacts', 
+                window.appState.appId, 
+                'public', 
+                'data', 
+                'photos'
+            );
+
+            // RULE 2: Simple query (no orderBy) to avoid requiring compound indexes
+            onSnapshot(photosCol, (snapshot) => {
+                const docsData = [];
+                snapshot.forEach(docSnap => {
+                    docsData.push({ id: docSnap.id, ...docSnap.data() });
+                });
+
+                if (docsData.length === 0) {
+                    // Seed initial sample photos if empty
+                    window.appState.photos = samplePhotos;
+                } else {
+                    // Sort in memory by timestamp descending
+                    docsData.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                    window.appState.photos = docsData;
+                }
+
+                renderFeed();
+                if (window.appState.activeLightboxId) {
+                    renderLightboxContent(window.appState.activeLightboxId);
+                }
+            }, (error) => {
+                console.error("Firestore onSnapshot error:", error);
+                window.appState.photos = samplePhotos;
+                renderFeed();
+            });
+        }
+
+        // RENDER FEED FUNCTION
+        window.renderFeed = function() {
+            const container = document.getElementById('photos-feed-container');
+            if (!container) return;
+
+            // Filter photos based on search query and category
+            let filtered = window.appState.photos.filter(p => {
+                const matchesCategory = window.appState.selectedCategory === 'All' || p.tag === window.appState.selectedCategory;
+                const matchesSearch = !window.appState.searchQuery || 
+                    p.caption.toLowerCase().includes(window.appState.searchQuery.toLowerCase()) ||
+                    p.author.toLowerCase().includes(window.appState.searchQuery.toLowerCase()) ||
+                    p.tag.toLowerCase().includes(window.appState.searchQuery.toLowerCase());
+                return matchesCategory && matchesSearch;
+            });
+
+            document.getElementById('feed-count-text').innerText = `${filtered.length} photos shared`;
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="glass-panel p-8 rounded-2xl text-center my-6">
+                        <i class="fa-solid fa-camera text-4xl text-slate-500 mb-3"></i>
+                        <h3 class="text-sm font-bold text-white mb-1">No Photos Found</h3>
+                        <p class="text-xs text-slate-400 mb-4">Be the first in your squad to share a photo here!</p>
+                        <button onclick="openUploadDrawer()" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl text-xs font-bold text-white shadow-md">
+                            Upload Now
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            // Render Card Layout
+            if (window.appState.viewMode === 'card') {
+                container.className = "space-y-4 mb-6";
+                container.innerHTML = filtered.map(photo => {
+                    const timeAgo = formatTimeAgo(photo.timestamp);
+                    const isLiked = photo.likedBy && photo.likedBy.includes(window.appState.currentUser.name);
+
+                    return `
+                        <div class="glass-panel rounded-2xl overflow-hidden border border-white/10 relative transition-all duration-300">
+                            <!-- Card Header -->
+                            <div class="p-3 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm border border-white/20">
+                                        ${photo.avatar || '😎'}
+                                    </div>
+                                    <div>
+                                        <h4 class="text-xs font-bold text-white">${escapeHtml(photo.author)}</h4>
+                                        <p class="text-[10px] text-slate-400 font-mono">${timeAgo}</p>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                    ${escapeHtml(photo.tag || 'Squad')}
+                                </span>
+                            </div>
+
+                            <!-- Photo Image Frame with Double Tap gesture -->
+                            <div class="relative bg-black/60 overflow-hidden cursor-pointer group" onclick="handlePhotoClick('${photo.id}')" ondblclick="handleDoubleTap('${photo.id}', event)">
+                                <img src="${photo.imageUrl}" alt="Squad Photo" class="w-full max-h-[420px] object-cover transition-transform duration-300 group-hover:scale-105" onerror="this.src='https://placehold.co/600x400/131326/a855f7?text=Image+Unavailable'">
+                                <div id="heart-anim-${photo.id}" class="heart-overlay absolute inset-0 flex items-center justify-center opacity-0 transition-opacity">
+                                    <i class="fa-solid fa-heart text-6xl text-pink-500 drop-shadow-[0_0_20px_rgba(236,72,153,0.8)]"></i>
+                                </div>
+                            </div>
+
+                            <!-- Actions Row -->
+                            <div class="p-3">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center gap-3">
+                                        <button onclick="toggleLike('${photo.id}')" class="flex items-center gap-1.5 text-xs font-semibold ${isLiked ? 'text-pink-500' : 'text-slate-300'} hover:text-pink-400 active:scale-125 transition-all">
+                                            <i class="${isLiked ? 'fa-solid' : 'fa-regular'} fa-heart text-base"></i>
+                                            <span>${photo.likes || 0}</span>
+                                        </button>
+                                        <button onclick="openLightbox('${photo.id}')" class="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-cyan-400 transition-colors">
+                                            <i class="fa-regular fa-comment text-base"></i>
+                                            <span>${(photo.comments || []).length}</span>
+                                        </button>
+                                    </div>
+                                    <button onclick="sharePhotoLink('${photo.id}')" class="text-xs text-slate-400 hover:text-white p-1">
+                                        <i class="fa-solid fa-share-nodes"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Caption -->
+                                <p class="text-xs text-slate-200 leading-snug mb-2 font-normal">
+                                    <span class="font-bold text-white mr-1">${escapeHtml(photo.author)}:</span>
+                                    ${escapeHtml(photo.caption)}
+                                </p>
+
+                                <!-- Recent Comment Preview -->
+                                ${photo.comments && photo.comments.length > 0 ? `
+                                    <div class="bg-white/5 p-2 rounded-xl border border-white/5 text-[11px] text-slate-300">
+                                        <span class="font-bold text-pink-300 mr-1">${escapeHtml(photo.comments[photo.comments.length - 1].author)}:</span>
+                                        <span>${escapeHtml(photo.comments[photo.comments.length - 1].text)}</span>
+                                    </div>
+                                ` : ''}
+
+                                <button onclick="openLightbox('${photo.id}')" class="text-[10px] text-slate-400 font-medium mt-1.5 hover:underline block">
+                                    ${photo.comments && photo.comments.length > 0 ? `View all ${photo.comments.length} comments` : 'Add a comment...'}
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } 
+            // Render Compact Grid Layout
+            else {
+                container.className = "grid grid-cols-3 gap-2 mb-6";
+                container.innerHTML = filtered.map(photo => `
+                    <div onclick="openLightbox('${photo.id}')" class="relative aspect-square rounded-xl overflow-hidden glass-panel cursor-pointer group border border-white/10">
+                        <img src="${photo.imageUrl}" alt="Grid photo" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" onerror="this.src='https://placehold.co/200x200/131326/a855f7?text=Grid'">
+                        <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white text-xs font-bold">
+                            <span><i class="fa-solid fa-heart text-pink-500"></i> ${photo.likes || 0}</span>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        };
+
+        // LIKE TOGGLE FUNCTION
+        window.toggleLike = async function(photoId) {
+            const photo = window.appState.photos.find(p => p.id === photoId);
+            if (!photo) return;
+
+            const currUser = window.appState.currentUser.name;
+            let likedBy = photo.likedBy || [];
+            let likes = photo.likes || 0;
+
+            if (likedBy.includes(currUser)) {
+                likedBy = likedBy.filter(u => u !== currUser);
+                likes = Math.max(0, likes - 1);
+            } else {
+                likedBy.push(currUser);
+                likes += 1;
+            }
+
+            // Local state update
+            photo.likedBy = likedBy;
+            photo.likes = likes;
+            renderFeed();
+
+            // Firestore Sync if available
+            if (window.appState.db && window.appState.user && !photoId.startsWith('sample-')) {
+                try {
+                    const docRef = doc(
+                        window.appState.db, 
+                        'artifacts', 
+                        window.appState.appId, 
+                        'public', 
+                        'data', 
+                        'photos', 
+                        photoId
+                    );
+                    await updateDoc(docRef, { likes, likedBy });
+                } catch(e) {
+                    console.error("Error updating likes in Firestore:", e);
+                }
+            }
+        };
+
+        // DOUBLE TAP HEART ANIMATION
+        window.handleDoubleTap = function(photoId, event) {
+            event.stopPropagation();
+            const animEl = document.getElementById(`heart-anim-${photoId}`);
+            if (animEl) {
+                animEl.classList.remove('opacity-0');
+                animEl.classList.add('animate-heart-bounce');
+                setTimeout(() => {
+                    animEl.classList.add('opacity-0');
+                    animEl.classList.remove('animate-heart-bounce');
+                }, 800);
+            }
+            window.toggleLike(photoId);
+        };
+
+        window.handlePhotoClick = function(photoId) {
+            // Mobile click fallback to lightbox
+            window.openLightbox(photoId);
+        };
+
+        // LIGHTBOX MODAL CONTROLS
+        window.openLightbox = function(photoId) {
+            const photo = window.appState.photos.find(p => p.id === photoId);
+            if (!photo) return;
+
+            window.appState.activeLightboxId = photoId;
+            renderLightboxContent(photoId);
+
+            const modal = document.getElementById('lightbox-modal');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+        };
+
+        window.closeLightbox = function() {
+            window.appState.activeLightboxId = null;
+            const modal = document.getElementById('lightbox-modal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        };
+
+        function renderLightboxContent(photoId) {
+            const photo = window.appState.photos.find(p => p.id === photoId);
+            if (!photo) return;
+
+            document.getElementById('lb-avatar').innerText = photo.avatar || '😎';
+            document.getElementById('lb-author').innerText = photo.author;
+            document.getElementById('lb-time').innerText = formatTimeAgo(photo.timestamp);
+            document.getElementById('lb-image').src = photo.imageUrl;
+            document.getElementById('lb-tag').innerText = photo.tag || 'Squad';
+            document.getElementById('lb-caption').innerText = photo.caption;
+            document.getElementById('lb-likes-count').innerText = photo.likes || 0;
+
+            const isLiked = photo.likedBy && photo.likedBy.includes(window.appState.currentUser.name);
+            const heartIcon = document.getElementById('lb-heart-icon');
+            if (isLiked) {
+                heartIcon.className = "fa-solid fa-heart text-pink-500";
+            } else {
+                heartIcon.className = "fa-regular fa-heart text-slate-300";
+            }
+
+            const comments = photo.comments || [];
+            document.getElementById('lb-comments-count').innerText = comments.length;
+
+            const commentsList = document.getElementById('lb-comments-list');
+            commentsList.innerHTML = comments.map(c => `
+                <div class="bg-white/5 p-2 rounded-xl border border-white/5 text-xs">
+                    <div class="flex items-center gap-1.5 mb-0.5">
+                        <span class="text-xs">${c.avatar || '😎'}</span>
+                        <span class="font-bold text-white text-[11px]">${escapeHtml(c.author)}</span>
+                    </div>
+                    <p class="text-slate-300 text-[11px] leading-snug">${escapeHtml(c.text)}</p>
+                </div>
+            `).join('');
+        }
+
+        window.toggleLikeFromLightbox = function() {
+            if (window.appState.activeLightboxId) {
+                window.toggleLike(window.appState.activeLightboxId);
+                renderLightboxContent(window.appState.activeLightboxId);
+            }
+        };
+
+        window.submitLightboxComment = async function() {
+            const input = document.getElementById('lb-comment-input');
+            const commentText = input.value.trim();
+            const photoId = window.appState.activeLightboxId;
+
+            if (!commentText || !photoId) return;
+
+            const photo = window.appState.photos.find(p => p.id === photoId);
+            if (!photo) return;
+
+            const newComment = {
+                author: window.appState.currentUser.name,
+                avatar: window.appState.currentUser.avatar,
+                text: commentText,
+                timestamp: Date.now()
+            };
+
+            photo.comments = photo.comments || [];
+            photo.comments.push(newComment);
+
+            input.value = '';
+            renderLightboxContent(photoId);
+            renderFeed();
+
+            // Firestore update
+            if (window.appState.db && window.appState.user && !photoId.startsWith('sample-')) {
+                try {
+                    const docRef = doc(
+                        window.appState.db, 
+                        'artifacts', 
+                        window.appState.appId, 
+                        'public', 
+                        'data', 
+                        'photos', 
+                        photoId
+                    );
+                    await updateDoc(docRef, { comments: photo.comments });
+                } catch(e) {
+                    console.error("Error posting comment to Firestore:", e);
+                }
+            }
+        };
+
+        // IMAGE COMPRESSION UTILITY (Keep image payload optimized under 800px)
+        function compressImage(file, maxWidth = 800, quality = 0.75) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > maxWidth) {
+                            height = Math.round((height * maxWidth) / width);
+                            width = maxWidth;
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', quality));
+                    };
+                    img.onerror = (err) => reject(err);
+                };
+                reader.onerror = (err) => reject(err);
+            });
+        }
+
+        window.handleFileSelect = async function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            try {
+                showToast("Compressing photo...");
+                const compressedDataUrl = await compressImage(file, 800, 0.75);
+                window.appState.currentUploadImageData = compressedDataUrl;
+
+                document.getElementById('upload-preview-img').src = compressedDataUrl;
+                document.getElementById('preview-container').classList.remove('hidden');
+            } catch(e) {
+                console.error("Error processing file:", e);
+                showToast("Failed to load photo file!");
+            }
+        };
+
+        window.previewUrlImage = function(url) {
+            if (url) {
+                window.appState.currentUploadImageData = url;
+                document.getElementById('upload-preview-img').src = url;
+                document.getElementById('preview-container').classList.remove('hidden');
+            }
+        };
+
+        window.clearUploadPreview = function() {
+            window.appState.currentUploadImageData = null;
+            document.getElementById('preview-container').classList.add('hidden');
+            document.getElementById('file-input-field').value = '';
+            document.getElementById('upload-url-input').value = '';
+        };
+
+        window.submitPhoto = async function() {
+            const imageUrl = window.appState.currentUploadImageData;
+            const author = document.getElementById('upload-author-input').value.trim() || window.appState.currentUser.name;
+            const caption = document.getElementById('upload-caption-input').value.trim();
+            const tagRadios = document.getElementsByName('tag-radio');
+            let selectedTag = 'Hangouts';
+            for (let r of tagRadios) {
+                if (r.checked) selectedTag = r.value;
+            }
+
+            if (!imageUrl) {
+                showToast("Please select a photo or enter an image URL!");
+                return;
+            }
+
+            if (!caption) {
+                showToast("Please add a caption for your squad!");
+                return;
+            }
+
+            const postBtn = document.getElementById('post-photo-btn');
+            postBtn.disabled = true;
+            postBtn.innerHTML = `<i class="fa-solid fa-circle-notch animate-spin"></i> Posting...`;
+
+            const newPhoto = {
+                author,
+                avatar: window.appState.currentUser.avatar,
+                imageUrl,
+                caption,
+                tag: selectedTag,
+                likes: 0,
+                likedBy: [],
+                comments: [],
+                timestamp: Date.now()
+            };
+
+            // Firestore sync if initialized
+            if (window.appState.db && window.appState.user) {
+                try {
+                    const photosCol = collection(
+                        window.appState.db, 
+                        'artifacts', 
+                        window.appState.appId, 
+                        'public', 
+                        'data', 
+                        'photos'
+                    );
+                    await addDoc(photosCol, newPhoto);
+                } catch(e) {
+                    console.error("Error saving photo to Firestore:", e);
+                    // Fallback to local
+                    newPhoto.id = 'local-' + Date.now();
+                    window.appState.photos.unshift(newPhoto);
+                }
+            } else {
+                newPhoto.id = 'local-' + Date.now();
+                window.appState.photos.unshift(newPhoto);
+            }
+
+            postBtn.disabled = false;
+            postBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Post to SnapSquad`;
+
+            clearUploadPreview();
+            document.getElementById('upload-caption-input').value = '';
+            closeUploadDrawer();
+            renderFeed();
+            showToast("Photo shared with SnapSquad! 🔥");
+        };
+
+        // DRAWER CONTROLS
+        window.openUploadDrawer = function() {
+            document.getElementById('upload-author-input').value = window.appState.currentUser.name;
+            const drawer = document.getElementById('upload-drawer');
+            const panel = document.getElementById('upload-panel');
+            drawer.classList.remove('opacity-0', 'pointer-events-none');
+            panel.classList.remove('translate-y-full');
+        };
+
+        window.closeUploadDrawer = function() {
+            const drawer = document.getElementById('upload-drawer');
+            const panel = document.getElementById('upload-panel');
+            panel.classList.add('translate-y-full');
+            drawer.classList.add('opacity-0', 'pointer-events-none');
+        };
+
+        window.switchUploadTab = function(tab) {
+            if (tab === 'file') {
+                document.getElementById('tab-content-file').classList.remove('hidden');
+                document.getElementById('tab-content-url').classList.add('hidden');
+                document.getElementById('tab-btn-file').className = "flex-1 py-2 rounded-lg bg-pink-600 text-white transition-all";
+                document.getElementById('tab-btn-url').className = "flex-1 py-2 rounded-lg text-slate-400 hover:text-white transition-all";
+            } else {
+                document.getElementById('tab-content-url').classList.remove('hidden');
+                document.getElementById('tab-content-file').classList.add('hidden');
+                document.getElementById('tab-btn-url').className = "flex-1 py-2 rounded-lg bg-pink-600 text-white transition-all";
+                document.getElementById('tab-btn-file').className = "flex-1 py-2 rounded-lg text-slate-400 hover:text-white transition-all";
+            }
+        };
+
+        window.openProfileDrawer = function() {
+            document.getElementById('identity-name-input').value = window.appState.currentUser.name;
+            const drawer = document.getElementById('profile-drawer');
+            drawer.classList.remove('opacity-0', 'pointer-events-none');
+        };
+
+        window.closeProfileDrawer = function() {
+            const drawer = document.getElementById('profile-drawer');
+            drawer.classList.add('opacity-0', 'pointer-events-none');
+        };
+
+        window.selectIdentityEmoji = function(emoji) {
+            window.appState.currentUser.avatar = emoji;
+            document.getElementById('header-avatar-preview').innerText = emoji;
+            showToast(`Avatar updated to ${emoji}`);
+        };
+
+        window.saveIdentity = function() {
+            const name = document.getElementById('identity-name-input').value.trim();
+            if (name) {
+                window.appState.currentUser.name = name;
+                closeProfileDrawer();
+                showToast("Squad Identity saved!");
+                renderFeed();
+            }
+        };
+
+        // FILTER & SEARCH HELPERS
+        window.filterByCategory = function(category) {
+            window.appState.selectedCategory = category;
+            
+            // Update active pill UI
+            const pills = document.querySelectorAll('.category-pill');
+            pills.forEach(p => {
+                if (p.innerText.includes(category)) {
+                    p.className = "category-pill active shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md border border-purple-400/30 transition-all";
+                } else {
+                    p.className = "category-pill shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition-all";
+                }
+            });
+
+            renderFeed();
+        };
+
+        window.setFeedViewMode = function(mode) {
+            window.appState.viewMode = mode;
+            const cardBtn = document.getElementById('view-mode-card');
+            const gridBtn = document.getElementById('view-mode-grid');
+
+            if (mode === 'card') {
+                cardBtn.className = "p-1.5 px-2.5 rounded-lg text-xs font-semibold bg-purple-600 text-white shadow-sm transition-all";
+                gridBtn.className = "p-1.5 px-2.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all";
+            } else {
+                gridBtn.className = "p-1.5 px-2.5 rounded-lg text-xs font-semibold bg-purple-600 text-white shadow-sm transition-all";
+                cardBtn.className = "p-1.5 px-2.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all";
+            }
+
+            renderFeed();
+        };
+
+        window.toggleSearchBar = function() {
+            const bar = document.getElementById('search-bar-wrapper');
+            bar.classList.toggle('hidden');
+        };
+
+        window.handleSearch = function(val) {
+            window.appState.searchQuery = val.trim();
+            const clearBtn = document.getElementById('clear-search-btn');
+            if (val.trim()) clearBtn.classList.remove('hidden');
+            else clearBtn.classList.add('hidden');
+            renderFeed();
+        };
+
+        window.clearSearch = function() {
+            document.getElementById('search-input').value = '';
+            window.appState.searchQuery = '';
+            document.getElementById('clear-search-btn').classList.add('hidden');
+            renderFeed();
+        };
+
+        window.resetFilters = function() {
+            window.appState.selectedCategory = 'All';
+            window.appState.searchQuery = '';
+            filterByCategory('All');
+            clearSearch();
+        };
+
+        window.scrollToTop = function() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        window.sharePhotoLink = function(photoId) {
+            // Copy link to clipboard
+            const dummyUrl = window.location.href.split('#')[0] + `#photo-${photoId}`;
+            const tempInput = document.createElement('input');
+            document.body.appendChild(tempInput);
+            tempInput.value = dummyUrl;
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            showToast("Photo link copied to clipboard!");
+        };
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast-message');
+            document.getElementById('toast-text').innerText = msg;
+            toast.classList.remove('opacity-0', 'pointer-events-none', '-translate-y-4');
+            toast.classList.add('translate-y-0');
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'pointer-events-none', '-translate-y-4');
+                toast.classList.remove('translate-y-0');
+            }, 3000);
+        }
+
+        function formatTimeAgo(ts) {
+            if (!ts) return 'Just now';
+            const diffMs = Date.now() - ts;
+            const diffMins = Math.floor(diffMs / 60000);
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            const diffHours = Math.floor(diffMins / 60);
+            if (diffHours < 24) return `${diffHours}h ago`;
+            const diffDays = Math.floor(diffHours / 24);
+            return `${diffDays}d ago`;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+
+        // BACKGROUND ANIMATED CANVAS (Glowing floating particles)
+        function initBgCanvas() {
+            const canvas = document.getElementById('bg-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            let width = canvas.width = window.innerWidth;
+            let height = canvas.height = window.innerHeight;
+
+            window.addEventListener('resize', () => {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+            });
+
+            const particles = Array.from({ length: 25 }, () => ({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                radius: Math.random() * 2 + 1,
+                vx: (Math.random() - 0.5) * 0.3,
+                vy: (Math.random() - 0.5) * 0.3,
+                alpha: Math.random() * 0.5 + 0.2
+            }));
+
+            function animate() {
+                ctx.clearRect(0, 0, width, height);
+
+                // Draw subtle glowing gradient background spots
+                const g1 = ctx.createRadialGradient(width * 0.2, height * 0.2, 10, width * 0.2, height * 0.2, 280);
+                g1.addColorStop(0, 'rgba(168, 85, 247, 0.12)');
+                g1.addColorStop(1, 'transparent');
+                ctx.fillStyle = g1;
+                ctx.fillRect(0, 0, width, height);
+
+                const g2 = ctx.createRadialGradient(width * 0.8, height * 0.7, 10, width * 0.8, height * 0.7, 280);
+                g2.addColorStop(0, 'rgba(236, 72, 153, 0.1)');
+                g2.addColorStop(1, 'transparent');
+                ctx.fillStyle = g2;
+                ctx.fillRect(0, 0, width, height);
+
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.x < 0) p.x = width;
+                    if (p.x > width) p.x = 0;
+                    if (p.y < 0) p.y = height;
+                    if (p.y > height) p.y = 0;
+
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(236, 72, 153, ${p.alpha})`;
+                    ctx.fill();
+                });
+
+                requestAnimationFrame(animate);
+            }
+            animate();
+        }
+
+        // INIT APP ON LOAD
+        window.onload = function() {
+            initBgCanvas();
+            initFirebase();
+        };
+    </script>
+</body>
+</html>
